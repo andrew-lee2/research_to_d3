@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+/*.link {
+  fill: none;
+  stroke: #666;
+  stroke-width: 2.0px;
+}*/
+
+.node {
+  fill: #ccc;
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.node-active{
+  fill: #ccc;
+  stroke: #555;
+  stroke-width: 1.5px;
+}
+
+.link {
+  stroke: #555;
+  stroke-opacity: .3;
+}
+
+.link-active {
+  stroke: #555;
+  stroke-opacity: 1;
+}
+
+.arrow {
+  fill: #555;
+  fill-opacity: .3;
+}
+
+.arrow-active {
+  fill: #555;
+  fill-opacity: 1;
+}
+
+.text {
+  font: 12px sans-serif;
+  pointer-events: none;
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+}
+
+</style>
+<body>
+<script src="//d3js.org/d3.v3.min.js"></script>
+<script>
+
+graph = {
+  "nodes": [
+      {"name": "A"}, 
+      {"name": "B"}, 
+      {"name": "C"}, 
+      {"name": "D"}, 
+      {"name": "E"}, 
+      {"name": "F"}],
+  "links": [
+      {"source": 0, "target": 2, "value" :1}, 
+      {"source": 0, "target": 3, "value" :1}, 
+      {"source": 1, "target": 2, "value" :1}, 
+      {"source": 1, "target": 3, "value" :1}, 
+      {"source": 1, "target": 4, "value" :1},
+      {"source": 3, "target": 5, "value" :1},
+      {"source": 4, "target": 2, "value" :1},
+      {"source": 4, "target": 5, "value" :1},
+      {"source": 5, "target": 0, "value" :1}]
+}
+
+var linkedByIndex = {};
+graph.links.forEach(function(d) {
+  linkedByIndex[d.source + "," + d.target] = true;
+});
+
+//will need to change this
+function isConnected(a, b) {
+  return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index == b.index;
+}
+
+function hasConnections(a) {
+  for (var property in linkedByIndex) {
+    s = property.split(",");
+    if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
+      return true;
+  }
+  return false;
+}
+
+var width = 960
+  height = 500
+
+var force = d3.layout.force()
+  .nodes(graph.nodes)
+  .links(graph.links)
+  .charge(-3000)
+  .linkDistance(200)
+  .size([width, height])
+  .on("tick", tick)
+  .start();
+
+// Zoom definition
+var zoom = d3.behavior.zoom()
+  .scaleExtent([1, 10])
+  .on("zoom", zoomed);
+
+function zoomed() {
+  container.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+}
+
+var svg = d3.select('body').append("svg")
+  .attr("width", width)
+  .attr("height", height)
+  .append("g");
+
+
+var rect = svg.append("rect")
+  .attr("width", width)
+  .attr("height", height)
+  .style("fill", "none")
+  .style("pointer-events", "all")
+  .call(zoom);
+
+var container = svg.append("g");
+var defs = container.append("svg:defs");
+
+// build the arrow.
+var arrows = defs.selectAll("marker")
+  .data(["end", "end-active"]) // Different link/path types can be defined here
+  .enter().append("svg:marker") // This section adds in the arrows
+  .attr("id", String)
+  .attr("viewBox", "0 -5 10 10")
+  .attr("refX", 23)
+  .attr("refY", 0)
+  .attr("markerWidth", 6)
+  .attr("markerHeight", 6)
+  .attr("orient", "auto")
+  .append("svg:path")
+//   .append("path")
+  .attr("d", "M0,-5L10,0L0,5");
+
+defs.select("#end").attr("class", "arrow");
+defs.select("#end-active").attr("class", "arrow-active");
+ 
+var link = container.append("g").selectAll(".links")
+  .attr("class", "links")
+  .data(force.links())
+  .enter().append("line")
+  .attr("class", "link")
+  .attr("marker-end", "url(#end)");
+
+// var path = container.append("g").selectAll("path")
+//     .data(force.links())
+//   .enter().append("path")
+//     .attr("class", "link")
+//     .attr("class", "links")
+//     .attr("marker-end", "url(#end)");
+
+var node = container.append("g").selectAll(".node")
+  .attr("class", "nodes")
+  .data(force.nodes())
+  .enter().append("g")
+  .attr("class", "node")
+  .attr("cx", function(d) {
+    return d.x;
+  })
+  .attr("cy", function(d) {
+    return d.y;
+  })
+  .on("mouseover", mouseover)
+  .on("mouseout", mouseout)
+  .call(force.drag);
+
+node.append("circle")
+  .attr("r", 16);
+
+node.append("text")
+  .attr("class", "text")
+  .attr("x", -3)
+  .attr("dy", ".31em")
+  .text('')
+
+function tick() {
+//   path.attr("d", linkArc)
+  link
+    .attr("x1", function(d) { return d.source.x; })
+    .attr("y1", function(d) { return d.source.y; })
+    .attr("x2", function(d) { return d.target.x; })
+    .attr("y2", function(d) { return d.target.y; });
+  node.attr("transform", transform);
+}
+
+function transform(d) {
+  return "translate(" + d.x + "," + d.y + ")";
+}
+
+// try to add this in later
+// function linkArc(d) {
+//   var dx = d.target.x - d.source.x,
+//       dy = d.target.y - d.source.y,
+//       dr = Math.sqrt(dx * dx + dy * dy);
+//   return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0,1 " + d.target.x + "," + d.target.y;
+// }
+
+function mouseover(d) {
+  d3.select(this).select("circle").transition()
+    .duration(750)
+    .attr("r", 16);
+  set_highlight(d);
+}
+
+function mouseout(d) {
+  d3.select(this).select("circle").transition()
+    .duration(750)
+    .attr("r", 16);
+  exit_highlight(d)
+}
+
+function set_highlight(d) {
+  node.select("text").text(function(o) {
+    return isConnected(d, o) ? o.name : "";
+  })
+  node.attr("class", function(o) {
+    return isConnected(d, o) ? "node-active" : "node";
+  });
+  link.attr("marker-end", function(o) {
+    return isLinkForNode(d, o) ? "url(#end-active)" : "url(#end)";
+  });
+  link.attr("class", function(o) {
+    return isLinkForNode(d, o) ? "link-active" : "link";
+  });
+}
+
+function isLinkForNode(node, link){
+	return link.source.index == node.index || link.target.index == node.index;
+}
+
+function exit_highlight(d) {
+  node.attr("class", "node");
+  link.attr("class", "link");
+  link.attr("marker-end", "url(#end)");
+  node.select("text").text("")
+}
+
+</script>
