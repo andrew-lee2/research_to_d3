@@ -1,3 +1,3 @@
-# research_to_d3
+# A Simple Network Approach to Ranking Athletic Teams D3 Demo
 
-repo to make some web based examples from ranking_talk.ppt in files
+This d3 visualization is helps to illustrate a ranking algorithm presented in this [presentation](https://github.com/andrew-lee2/research_to_d3/blob/master/ranking%20talk.ppt). 
