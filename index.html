@@ -4,7 +4,6 @@
 <style>
 .node {
   fill: #fff;
-  /*stroke-opacity: .3;*/
   stroke: #555;
   stroke-width: 1.75px;
 }
@@ -70,26 +69,33 @@ graph = {
       {"source": 4, "target": 2, "value" :1},
       {"source": 4, "target": 5, "value" :1},
       {"source": 5, "target": 0, "value" :1}]
+};
+
+function get_node(graph, name) {
+    // get first node that has a name matching the given name (case-insensitive)
+    return graph.nodes.filter(function(node) { return node.name.toUpperCase() == name.toUpperCase(); })[0];
 }
+
+var sample_graph = {
+    'A': ['C', 'D'],
+    'B': ['C', 'D', 'E'],
+    'C': [],
+    'D': ['F'],
+    'E': ['C', 'F'],
+    'F': ['A'],
+};
+
 var linkedByIndex = {};
 graph.links.forEach(function(d) {
   linkedByIndex[d.source + "," + d.target] = true;
 });
-//will need to change this
+
 function isConnected(a, b, origin) {
   return (linkedByIndex[a.index + "," + b.index] && b.index != origin.index) || a.index == b.index;
-//   return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index == b.index;
 }
-function hasConnections(a) {
-  for (var property in linkedByIndex) {
-    s = property.split(",");
-    if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property])
-      return true;
-  }
-  return false;
-}
-var width = 960
-  height = 550
+
+var width = 960,
+  height = 550;
 var force = d3.layout.force()
   .nodes(graph.nodes)
   .links(graph.links)
@@ -112,7 +118,7 @@ var svg = d3.select('body').append("svg")
 // why isnt this working?
 var tip = d3.tip()
   .attr('class', 'd3-tip')
-  .offset([-10, 0])
+  .offset([-10, 0]);
 
 svg.call(tip);
 
@@ -183,32 +189,59 @@ function linkArc(d) {
   return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0,1 " + d.target.x + "," + d.target.y;
 }
 
+function simple_paths(node, graph, depth) {
+    var paths = [];
+    var stack = [];
+
+    (function simple_paths_helper(node, graph, depth) {
+        if (depth <= 0) {
+            paths.push(stack.slice(0));
+            return;
+        }
+
+        // record node as visited to prevent cycles
+        stack.push(node);
+        var unvisited_neighbors = 0;
+        var neighbors = graph[node];
+
+        for (var i = 0; i < neighbors.length; i++) {
+            if (stack.indexOf(neighbors[i]) === -1) {
+                unvisited_neighbors += 1;
+                simple_paths_helper(neighbors[i], graph, depth-1);
+            } 
+        }
+        if (unvisited_neighbors === 0) {
+            paths.push(stack.slice(0));
+        }
+
+        stack.pop(node);
+        return;
+    })(node, graph, depth);
+
+    return paths;
+}
+
 function mouseover(d) {
-  // console.log(d)
+  // possible depth change here 
+  var simple_path_array = simple_paths(d.name, sample_graph, 100);
+  // curried get_node function for easy mapping
+  var curried_get_node = function (node_name) { return get_node(graph, node_name); };
+  for(i = 0; i < simple_path_array.length; i++) { 
+    var temp_array = simple_path_array[i].map(curried_get_node);
+    for (j = 0; j < temp_array.length - 1; j++){
+      var _ = set_highlight(temp_array[j + 1], temp_array[j]);
+
+    }
+}
   tip.html("<strong>" + d.name + ": </strong> <span style='color:red'>"
        + d.label + "</span>"
         );
-  node.classed("mouseover", tip.show)
+  node.classed("mouseover", tip.show);
 
   d3.select(this).select("circle").transition()
     .duration(750)
     .attr("r", 16);
-  var queued_nodes = [d];
-  var nodes_seen = [d];
-  var indexes_of_nodes_visited = []; // kludgey solution to avoid having to process nodes/indices/names in a uniform fashion
-  while (queued_nodes.length > 0){
-    // get next node in the queue
-    var next_node = queued_nodes.shift();
-    indexes_of_nodes_visited.push(next_node.index);
-    var connected_nodes = set_highlight(next_node, d, indexes_of_nodes_visited);
-    connected_nodes.forEach(function(n) {
-      // add node to queue if it hasn't been seen yet
-      if (nodes_seen.indexOf(n) == -1) {
-        nodes_seen.push(n);
-        queued_nodes.push(n);
-      }
-    });
-  }
+
 }
 function mouseout(d) {
   d3.select(this).select("circle").transition()
@@ -217,7 +250,8 @@ function mouseout(d) {
   exit_highlight(d);
   node.classed("mouseover", tip.hide);
 }
-function set_highlight(d, origin, indexes_of_nodes_visited) {
+function set_highlight(d, origin) {
+
   var connected_nodes = [];
   node.attr("class", function(o) {
     if (isConnected(d, o, origin)) {
@@ -229,16 +263,16 @@ function set_highlight(d, origin, indexes_of_nodes_visited) {
     }
   });
   link.attr("marker-end", function(o) {
-    return isLinkForNode(d, o, origin, indexes_of_nodes_visited) ? "url(#end-active)" : d3.select(this).attr("marker-end");
+    return isLinkForNode(d, o, origin) ? "url(#end-active)" : d3.select(this).attr("marker-end");
   });
   link.attr("class", function(o) {
-    return isLinkForNode(d, o, origin, indexes_of_nodes_visited) ? "link-active" : d3.select(this).attr("class");
+    return isLinkForNode(d, o, origin) ? "link-active" : d3.select(this).attr("class");
   });
   return connected_nodes;
 }
-function isLinkForNode(node, link, origin, indexes_of_nodes_visited){
-	return link.source.index == node.index && link.target.index != origin.index && indexes_of_nodes_visited.indexOf(link.target.index) == -1; // only mark a link if the target node hasn't been visited to avoid cycles
-    // return link.source.index == node.index || link.target.index == node.index;
+function isLinkForNode(node, link, origin){
+
+  return link.source.index == origin.index && link.target.index == node.index;
 }
 function exit_highlight(d) {
   node.attr("class", "node");
